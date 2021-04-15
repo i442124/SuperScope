@@ -1,22 +1,23 @@
 import tqdm
 import scrapy
+from .helpers import *
 
 ## ----------------------------CREATING THE SPIDER------------------------------
 
 class ListSpider(scrapy.Spider):
     name = "list"
     custom_settings = {
-        'LOG_LEVEL' : 'ERROR'
+        'LOG_LEVEL':'ERROR',
+        'RETRY_TIMES': 50
     }
 
 ## ----------------------------DEFINING THE SPIDER------------------------------ 
 
-    def __init__(self, start_page=0, **kwargs):
-        self.start_urls = [f'https://www.metacritic.com/browse/games/score/metascore/all/all/filtered?page={start_page}']
+    def __init__(self, start_page=0):
+        self.start_urls = [f'{METACRITIC_LIST_ALL}?page={start_page}']
         self.start_page = int(start_page)
-        super().__init__(**kwargs)
 
-## ----------------------------GETTING GAMES URLs-------------------------------  
+## ----------------------------GETTING GAMES URLs-------------------------------
 
     def parse(self, response):
 
@@ -26,8 +27,11 @@ class ListSpider(scrapy.Spider):
         if current_page == self.start_page:
 
             ## Create the loading bar!
-            last_page_num = int(response.css('.last_page a ::text').get())        
-            self.pbar = tqdm.tqdm(total=last_page_num - self.start_page, desc="Listing games", unit='page', ascii=True)
+            page_count = self.settings['CLOSESPIDER_PAGECOUNT']
+            last_page_num = int(response.css('.last_page a ::text').get())
+            
+            page_count = last_page_num if page_count == 0 else page_count 
+            self.pbar = tqdm.tqdm(total=page_count - self.start_page, desc="Listing games", unit='page', ascii=True)
 
         ## The scraping of the items
         items_on_page = response.css('.browse_list_wrapper a.title::attr(href)').getall()
