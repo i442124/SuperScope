@@ -50,7 +50,9 @@ class ItemSpider(scrapy.Spider):
             "genres": extract_values(response, '.product_data .product_genre .data ::text'),
             
             # Summary
-            "summary": extract_value(response, '.product_data .product_summary .data .blurb_expanded ::text'),
+            "summary": 
+                extract_value(response, '.product_data .product_summary .data .blurb_expanded ::text') or
+                extract_value(response, '.product_data .product_summary .data span ::text'),
 
             # Artwork of Box
             "thumbnail": thumbnail.decode('utf-8')
