@@ -17,7 +17,7 @@ parser.add_argument('-o', '--output', nargs='?', default='output', help='Name of
 if __name__ == '__main__':
 
     args = parser.parse_args()
-    images = pd.read_json(args.file)[:1]
+    images = pd.read_json(args.file)
     
     if (args.histogram):
         images['histogram'] = np.empty
@@ -40,5 +40,4 @@ if __name__ == '__main__':
         if(args.structure):
             images.at[idx, 'structure'] = helper.resize(image, 16, 16)
 
-    print(images['structure'])  
     images.to_pickle(args.output)
