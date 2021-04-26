@@ -1,4 +1,4 @@
 *.psd filter=lfs diff=lfs merge=lfs -text
-games.json filter=lfs diff=lfs merge=lfs -text
-game_reviews.json filter=lfs diff=lfs merge=lfs -text
-game_details.json filter=lfs diff=lfs merge=lfs -text
+video-game-list.json filter=lfs diff=lfs merge=lfs -text
+raw-game-details.json filter=lfs diff=lfs merge=lfs -text
+raw-game-reviews.json filter=lfs diff=lfs merge=lfs -text
