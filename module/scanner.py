@@ -32,14 +32,16 @@ def best_ssim_matches(image, targets):
     return matches[:800]
 
 def best_sift_match(image, targets):
-
     matches = []
     key, desc = SIFT.extract_from_image(image)
+
     for target in targets:
         desc_matches = SIFT.match_descriptors(desc, target['descriptors'])
-        matches.append({ 'title': target['title'], 'platform': target['platform'], 'image':target['image'], 'keypoints': target['keypoints'], 'matches':desc_matches })
-    
-    best_match = sorted(matches, key=lambda x: len(x['matches']), reverse=True)[0]
+        matches.append({ **target, 'matches': desc_matches, 'count':  
+            len({ m[0].trainIdx for m in desc_matches })
+        })
+
+    best_match = sorted(matches, key=lambda x: x['count'], reverse=True)[0]
     cv2.imshow('match', cv2.drawMatchesKnn(image, key, resize(base64.load_image(best_match['image']), height=256), best_match['keypoints'], best_match['matches'], None, flags=2))
     return best_match
 
