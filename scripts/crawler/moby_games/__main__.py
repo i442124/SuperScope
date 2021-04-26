@@ -8,7 +8,7 @@ from scrapy.utils.project import get_project_settings
 
 from spiders.image_spider import ImageSpider
 
-parser = argparse.ArgumentParser(description='Metacritic Scraper')
+parser = argparse.ArgumentParser(description='MobyGames Scraper')
 parser.add_argument('file', help='File with the list of pages to visit.')
 parser.add_argument('-f', '--format', nargs='?', default='JSON', help='Format of the output file.')
 parser.add_argument('-o', '--output', nargs='?', default='output', help='Name of the output file.')
