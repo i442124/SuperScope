@@ -7,6 +7,9 @@ def load_image(base64_image):
     array = np.fromstring(img, dtype=np.uint8)
     return cv2.imdecode(array, cv2.IMREAD_COLOR)
 
+def convert_to_black_white(image):
+    return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+
 def resize(image, height=None, width=None):
     if height is not None or width is not None:
         dim = (height, width)
