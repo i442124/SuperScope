@@ -1,60 +1,62 @@
 import cv2
+import numpy as np
+import pandas as pd
+
 from image_processing import base64
+from image_processing import transform
 from image_processing.feature import HIST
-from image_processing.feature import SIFT
 from image_processing.feature import SSIM
-from image_processing.transform import resize
+from image_processing.feature import SIFT
 
-def best_histogram_matches(image, targets):
-    correlations = []
-    hist = HIST.get(image)
-    for target in targets:
-        corr = HIST.compare(hist, target['histogram'])
-        correlations.append(corr)
+def draw_matches(query, target, match):
+    image_features = (query, match['q_keypoints'], target, match['t_keypoints'])
+    return cv2.drawMatchesKnn(*image_features, match['matches'], None, flags=2)
 
-    matcher = lambda pair: pair[0]
-    matches = zip(correlations, targets)
-    matches = [x for _, x in sorted(matches, key=matcher, reverse=True)]
-    return matches[:3500]
+def best_histogram_matches(histogram, targets):
+    matches = pd.DataFrame(targets[['title', 'platform', 'histogram']])
+    matches['correlation'] = matches['histogram'].apply(lambda x: HIST.compare(histogram, x))
+    return matches.sort_values(by='correlation', ascending=False)
+
+def best_ssim_matches(structure, targets):
+    matches = pd.DataFrame(targets[['structure']])
+    matches['similarity'] = matches['structure'].apply(lambda x: SSIM.compare(structure, x))
+    return matches.sort_values(by='similarity', ascending=False)
+
+def get_descriptor_matches(desc, targets):
+    desc_matches = targets['descriptors'].apply(lambda x: SIFT.match_descriptors(desc, x))
+    match_count = desc_matches.apply(lambda x: SIFT.get_match_count(x))
+    return desc_matches, match_count
 
 
-def best_ssim_matches(image, targets):
-    similarities = []
-    image = SSIM.prepare(image)
+def scan_for_matches(query, targets, top_n=1):
 
-    for target in targets:
-        ssim = SSIM.compare(image, target['structure'])
-        similarities.append(ssim)
+    ## USE COLOR HISTOGRAMS TO FILTER OUT IMAGES 
+    ## WITH COLORS THAT DIFFER TO MUCH FROM QUERY COLORS
+    # histogram = HIST.extract_from_image(query)
+    # histogram_matches = best_histogram_matches(histogram, targets)
+    # targets = targets.reindex(histogram_matches.index, copy=True).iloc[:800]
 
-    matcher = lambda pair: pair[0]
-    matches = zip(similarities, targets)
-    matches = [x for _, x in sorted(matches, key=matcher, reverse=True)]
-    return matches[:800]
+    ## USE SIMILARITY INDEX TO FILTER OUT IMAGES 
+    ## THAT DIFFER TOO MUCH FROM QUERY STRUCTURE
+    #ssim = SSIM.preprocess_image(query)
+    #ssim_matches = best_ssim_matches(ssim, targets)
+    #targets = targets.reindex(ssim_matches.index, copy=True).iloc[:100]
 
-def best_sift_match(image, targets):
-    matches = []
-    key, desc = SIFT.extract_from_image(image)
+    ## USE THE SIFT KEYPOINTS AND DESCRIPTORS TO
+    ## LOOK FOR THE STRONGEST CORRELATION BETWEEN IMAGES
+    q_keys, q_desc = SIFT.extract_from_image(query)
+    t_keys, t_desc = targets['keypoints'], targets['descriptors']
+    desc_matches, match_count = get_descriptor_matches(q_desc, targets)
 
-    for target in targets:
-        desc_matches = SIFT.match_descriptors(desc, target['descriptors'])
-        matches.append({ **target, 'matches': desc_matches, 'count':  
-            len({ m[0].trainIdx for m in desc_matches })
-        })
+    ## CREATE NICE STRUCTURE FOR THE MATCHES SO
+    ## WE CAN EASILY DRAW THE KEYPOINTS IF WE NEED TO
+    matches = pd.DataFrame(targets[['title', 'platform', 'image']])
+    matches['q_keypoints'] = [q_keys] * len(matches)
+    matches['t_keypoints'] = t_keys
+    matches['matches'] = desc_matches
+    matches['count'] = match_count
 
-    best_match = sorted(matches, key=lambda x: x['count'], reverse=True)[0]
-    cv2.imshow('match', cv2.drawMatchesKnn(image, key, resize(base64.load_image(best_match['image']), height=256), best_match['keypoints'], best_match['matches'], None, flags=2))
-    return best_match
-
-def scan_for_matches(query_image, targets):
-    image = resize(query_image, height=256)
-    targets = targets.to_dict(orient='records')
-
-    ## COMPARE WITH HISTOGRAMS THAT ARE CLOSEST
-    targets = best_histogram_matches(image, targets)
-
-    ## COMPARE WITH BEST SIMLIARITIES BETWEEN IMAGES (SSIM)
-    targets = best_ssim_matches(image, targets)
-
-    ## COMPARE WITH BEST SIMILARITIES BETWEEN IMAGES (SIFT)
-    target = best_sift_match(image, targets)
-    return target
+    ## SORT VALUES BY THE NUMBER OF FEATURES MATCHED
+    ## TOP RESTULT IS MOST LIKELY THE IMAGE WE ARE LOOKING FOR
+    matches.sort_values(by='count', ascending=False, inplace=True)
+    return matches.iloc[:top_n] if top_n > 1 else matches.iloc[top_n]

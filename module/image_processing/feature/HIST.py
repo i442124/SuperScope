@@ -1,6 +1,6 @@
 import cv2
 
-def get(image):
+def extract_from_image(image):
     hist = cv2.calcHist([image], [0, 1, 2], None, [8, 8, 8], [0,256,0,256,0,256])
     hist = cv2.normalize(hist, None)
     return hist
