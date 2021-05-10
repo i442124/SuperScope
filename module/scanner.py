@@ -18,9 +18,9 @@ def best_histogram_matches(histogram, targets):
     return matches.sort_values(by='correlation', ascending=False)
 
 def best_ssim_matches(structure, targets):
-    matches = pd.DataFrame(targets[['structure']])
-    matches['similarity'] = matches['structure'].apply(lambda x: SSIM.compare(structure, x))
-    return matches.sort_values(by='similarity', ascending=False)
+    matches = pd.DataFrame(targets[['structure', 'platform', 'title']])
+    matches['similarity'] = matches['structure'].apply(lambda x: SSIM.compare_nrmse(structure, x))
+    return matches.sort_values(by='similarity', ascending=True)
 
 def get_descriptor_matches(desc, targets):
     desc_matches = targets['descriptors'].apply(lambda x: SIFT.match_descriptors(desc, x))
@@ -38,9 +38,10 @@ def scan_for_matches(query, targets, top_n=1):
 
     ## USE SIMILARITY INDEX TO FILTER OUT IMAGES 
     ## THAT DIFFER TOO MUCH FROM QUERY STRUCTURE
-    #ssim = SSIM.preprocess_image(query)
-    #ssim_matches = best_ssim_matches(ssim, targets)
-    #targets = targets.reindex(ssim_matches.index, copy=True).iloc[:100]
+
+    ssim = SSIM.preprocess_image(query)
+    ssim_matches = best_ssim_matches(ssim, targets)
+    targets = targets.reindex(ssim_matches.index, copy=True).iloc[:800]
 
     ## USE THE SIFT KEYPOINTS AND DESCRIPTORS TO
     ## LOOK FOR THE STRONGEST CORRELATION BETWEEN IMAGES
