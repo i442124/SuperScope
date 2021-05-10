@@ -12,7 +12,7 @@ def convert_to_black_white(image):
 
 def resize(image, height=None, width=None):
     if height is not None or width is not None:
-        dim = (height, width)
+        dim = (width, height)
         h, w = image.shape[:2] 
         if width is None:
             r = height / float(h)
@@ -23,8 +23,8 @@ def resize(image, height=None, width=None):
         image = cv2.resize(image, dim)
     return image
 
-def calcHist(image):
-    ranges = [[0, 1, 2], [8, 8, 8], [0, 256,0,256,0,256]]
+def calcHist(image, n_bins):
+    ranges = [[0, 1, 2], [n_bins, n_bins, n_bins], [0, 256,0,256,0,256]]
     histogram = cv2.calcHist([image], ranges[0], None, ranges[1], ranges[2])
     histogram = cv2.normalize(histogram, None)
     return histogram

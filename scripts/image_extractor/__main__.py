@@ -13,6 +13,7 @@ parser.add_argument('-ef', '--extract_features', action='store_true', help='Extr
 parser.add_argument('-c', '--color', action='store_true', help='Retain color information in similarity image.')
 parser.add_argument('-s', '--size', type=int, default=16, help='The size of the structual similarty image.')
 parser.add_argument('-k', '--keypoints', type=int, default=500, help='The amount of keypoints to extract.')
+parser.add_argument('-b', '--bins', type=int, default=8, help='The number of bins in the color histogram.')
 parser.add_argument('-W', '--width', type=int, default=None, help='Width in pixels when extracting features.')
 parser.add_argument('-H', '--height', type=int, default=None, help='Height in pixels when extracting features.')
 parser.add_argument('-o', '--output', nargs='?', default='output', help='The name of the output file.')
@@ -36,7 +37,7 @@ def main():
         image = helper.resize(image, width=args.width, height=args.height)
 
         if (args.extract_histogram):
-            images.at[idx, 'histogram'] = helper.calcHist(image)
+            images.at[idx, 'histogram'] = helper.calcHist(image, args.bins)
         if (args.extract_structure):
             structure = image if args.color else helper.convert_to_black_white(image)
             images.at[idx, 'structure'] = helper.resize(structure, args.size, args.size)
