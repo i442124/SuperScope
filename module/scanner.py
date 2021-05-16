@@ -1,63 +1,104 @@
 import cv2
+import time
 import numpy as np
 import pandas as pd
 
+from storage import games
+from storage import images
+
 from image_processing import base64
+from image_processing import cropping
 from image_processing import transform
-from image_processing.feature import HIST
-from image_processing.feature import SSIM
-from image_processing.feature import SIFT
+from image_processing.features import color_histogram
+from image_processing.features import descriptors
+from image_processing.features import structure
 
-def draw_matches(query, target, match):
-    image_features = (query, match['q_keypoints'], target, match['t_keypoints'])
-    return cv2.drawMatchesKnn(*image_features, match['matches'], None, flags=2)
+## IN THE NOTEBOOK FOR COLOR HISTOGRAMS
+## WE CONCLUDED THAT THERE IS NO GOOD
+## CORRELATION IN THE HISTOGRAMS
+USE_COLOR_HISTOGRAM_TO_FILTER = False
 
-def best_histogram_matches(histogram, targets):
-    matches = pd.DataFrame(targets[['title', 'platform', 'histogram']])
-    matches['correlation'] = matches['histogram'].apply(lambda x: HIST.compare(histogram, x))
-    return matches.sort_values(by='correlation', ascending=False)
+## IN THE NOTEBOOK FOR IMAGE SIMILARITY
+## WE CONCLUDED THAT IT WOULD BE A MAJOR BENIFIT
+## TO FILTER THE SELECTION OF IMAGES TO ONLY THE TOP RESULTS
+USE_IMAGE_SIMILARITY_TO_FILTER = False
 
-def best_ssim_matches(structure, targets):
-    matches = pd.DataFrame(targets[['structure', 'platform', 'title']])
-    matches['similarity'] = matches['structure'].apply(lambda x: SSIM.compare_nrmse(structure, x))
-    return matches.sort_values(by='similarity', ascending=True)
+## THE MINIMUM NUMBER OF MATCHES
+## TO BE CONSIDERED THE SAME IMAGE
+MATCH_DESCRIPTOR_THRESHOLD = 30
 
-def get_descriptor_matches(desc, targets):
-    desc_matches = targets['descriptors'].apply(lambda x: SIFT.match_descriptors(desc, x))
-    match_count = desc_matches.apply(lambda x: SIFT.get_match_count(x))
-    return desc_matches, match_count
+def ensure_image_dimensions(image):
+    ## CROP THE BLACK BORDERS FROM THE CAMERA
+    image = cropping.crop_boundaries(image)
+    
+    ## AND TRANSFORM THE IMAGE TO THE RESOLUTION CONFIGURED IN 
+    ## THE DATA STORAGE SOLUTION, (MUST BE SAME VALUE AS PREPROCESS_IMAGE_SIZE)
+    return transform.resize_maintain_aspect(image, height=256)
 
+# SORTS THE IMAGES BASED ON THE CORRELATION
+# BETWEEN THE QUERY HISTOGRAM AND TARGET HISTOGRAMS
+def best_histogram_matches(hist, images):
+    matches = images.histogram.apply(color_histogram.compare_corr, args=[hist])
+    return matches.sort_values(ascending=False)
 
-def scan_for_matches(query, targets, top_n=1):
+# SORTS THE IMAGES BASED ON THE SIMILARITY SCORES
+# BETWEEN THE QUERY STRUCUTER AND TARGET STRUCUTRES
+def best_structure_matches(struct, images):
+    matches = images.structure.apply(structure.compare_nrmse, args=[struct])
+    return matches.sort_values(ascending=True)
 
-    ## USE COLOR HISTOGRAMS TO FILTER OUT IMAGES 
-    ## WITH COLORS THAT DIFFER TO MUCH FROM QUERY COLORS
-    # histogram = HIST.extract_from_image(query)
-    # histogram_matches = best_histogram_matches(histogram, targets)
-    # targets = targets.reindex(histogram_matches.index, copy=True).iloc[:800]
+def best_descriptor_matches(desc, images):
+    matches = images.descriptors.apply(descriptors.match, args=[desc])
+    return matches, matches.apply(descriptors.get_unique_count)
 
-    ## USE SIMILARITY INDEX TO FILTER OUT IMAGES 
+def scan_for_matches(image, top_n=1):
+
+    ## INITIALIZE FULL SET OF TARGET IMAGES
+    filtered_images = images
+
+    ## ENSURE THAT THE QUERY IMAGE IS PROPERLY
+    ## SCALED BEFORE PERFORMING ANY OPERATIONS
+    image = ensure_image_dimensions(image)
+
+    ## USE COLOR HISTGORAM TO FILTER OUT IMAGES
+    ## WITH COLORS THAT DIFFER TO MUCH FROM THE QUERY IMAGE
+    if USE_COLOR_HISTOGRAM_TO_FILTER:
+        hist = color_histogram.extract_from_image(image)
+        hist_matches = best_histogram_matches(hist, filtered_images)
+        filtered_images = filtered_images.reindex(hist_matches.index).loc[:3500]
+
+    ## USE SIMILARITY INDEX TO FILTER OUT IMAGES
     ## THAT DIFFER TOO MUCH FROM QUERY STRUCTURE
-
-    ssim = SSIM.preprocess_image(query)
-    ssim_matches = best_ssim_matches(ssim, targets)
-    targets = targets.reindex(ssim_matches.index, copy=True).iloc[:800]
+    if USE_IMAGE_SIMILARITY_TO_FILTER:
+        struct = structure.extract_from_image(image)
+        struct_matches = best_structure_matches(struct, filtered_images)
+        filtered_images = filtered_images.loc[struct_matches.index[:800]]
 
     ## USE THE SIFT KEYPOINTS AND DESCRIPTORS TO
-    ## LOOK FOR THE STRONGEST CORRELATION BETWEEN IMAGES
-    q_keys, q_desc = SIFT.extract_from_image(query)
-    t_keys, t_desc = targets['keypoints'], targets['descriptors']
-    desc_matches, match_count = get_descriptor_matches(q_desc, targets)
+    ## LOOK FOR THE NUMBER OF MATCHES BETWEEN IMAGES
+    q_keys, q_desc = descriptors.extract_from_image(image)
+    t_keys, t_desc = filtered_images.keypoints, filtered_images.descriptors
+    desc_matches, match_count = best_descriptor_matches(q_desc, filtered_images)
 
-    ## CREATE NICE STRUCTURE FOR THE MATCHES SO
-    ## WE CAN EASILY DRAW THE KEYPOINTS IF WE NEED TO
-    matches = pd.DataFrame(targets[['title', 'platform', 'image']])
+    ## CREATE A NEW DATAFRAME WITH ALL THE MATCH RESULTS
+    matches = pd.DataFrame(filtered_images[['title', 'platform', 'image']])
     matches['q_keypoints'] = [q_keys] * len(matches)
     matches['t_keypoints'] = t_keys
     matches['matches'] = desc_matches
     matches['count'] = match_count
 
-    ## SORT VALUES BY THE NUMBER OF FEATURES MATCHED
-    ## TOP RESTULT IS MOST LIKELY THE IMAGE WE ARE LOOKING FOR
+    ## AND SORT THEM BY THE NUMBER OF DESCRIPTORS MATCHED
+    ## THE TOP RESULTS IS MOST LIKELY THE VIDEO GAME
+    ## THAT WAS BEING SCANNED BY THE USERS (IF IT
+    ## EXISTS IN THE DATASET OF COURSE)
     matches.sort_values(by='count', ascending=False, inplace=True)
     return matches.iloc[:top_n] if top_n > 1 else matches.iloc[top_n]
+
+
+## DRAWS THE MATCHED KEYPOINTS BETWEEN A 
+## QUERY AND TARGET IMAGE ON A NEW IMAGE
+def draw_matches(query, target, match):
+    query = ensure_image_dimensions(query)
+    target = ensure_image_dimensions(target)
+    image_features = (target, match['t_keypoints'], query, match['q_keypoints'])
+    return cv2.drawMatchesKnn(*image_features, match['matches'], None, flags=2)
