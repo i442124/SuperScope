@@ -20,6 +20,10 @@ class ItemSpider(scrapy.Spider):
         self.start_urls = parse_url(game_list)
         self.pbar = pbar(count=len(game_list))
 
+    def start_requests(self):
+        for index, url in enumerate(self.start_urls):
+            yield scrapy.Request(url, callback=self.parse, meta={'index': index })
+
 ## ----------------------------GETTING GAMES URLs-------------------------------
 
     def parse(self, response):
@@ -28,6 +32,9 @@ class ItemSpider(scrapy.Spider):
         thumbnail = b64encode(requests.get(thumbnail).content)
         
         yield {     
+            ## Index
+            "index": response.meta['index'],
+            
             ## Title
             "title": extract_value(response, '.product_title h1 ::text'),
             ## Platform
