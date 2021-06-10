@@ -51,7 +51,7 @@ def best_descriptor_matches(desc, images):
     matches = images.descriptors.apply(descriptors.match, args=[desc])
     return matches, matches.apply(descriptors.get_unique_count)
 
-def scan_for_matches(image, top_n=1):
+def scan_for_matches(image, top_n=1, use_hist=USE_COLOR_HISTOGRAM_TO_FILTER, use_ssim=USE_IMAGE_SIMILARITY_TO_FILTER):
 
     ## INITIALIZE FULL SET OF TARGET IMAGES
     filtered_images = images
@@ -62,17 +62,17 @@ def scan_for_matches(image, top_n=1):
 
     ## USE COLOR HISTGORAM TO FILTER OUT IMAGES
     ## WITH COLORS THAT DIFFER TO MUCH FROM THE QUERY IMAGE
-    if USE_COLOR_HISTOGRAM_TO_FILTER:
+    if use_hist:
         hist = color_histogram.extract_from_image(image)
         hist_matches = best_histogram_matches(hist, filtered_images)
         filtered_images = filtered_images.reindex(hist_matches.index).loc[:3500]
 
     ## USE SIMILARITY INDEX TO FILTER OUT IMAGES
     ## THAT DIFFER TOO MUCH FROM QUERY STRUCTURE
-    if USE_IMAGE_SIMILARITY_TO_FILTER:
+    if use_ssim:
         struct = structure.extract_from_image(image)
         struct_matches = best_structure_matches(struct, filtered_images)
-        filtered_images = filtered_images.loc[struct_matches.index[:800]]
+        filtered_images = filtered_images.loc[struct_matches.index[:1200]]
 
     ## USE THE SIFT KEYPOINTS AND DESCRIPTORS TO
     ## LOOK FOR THE NUMBER OF MATCHES BETWEEN IMAGES
