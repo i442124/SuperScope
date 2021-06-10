@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+
+    <meta charset="UTF-8">
+    <title>SuperScope</title>
+
+    <meta name="author" content="Rick Verhaegh">
+    <meta name="description" content="Judge video games by their cover!">
+
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="SuperScope"> 
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+
+    <link rel="stylesheet" href="style.css">
+    <script src="javascript.js"></script>
+</head>
+<body>
+    <div class="content">
+        <div class="video-panel">
+            <div class="video-viewport">
+                <video autoplay muted playsinline></video>
+            </div>
+        </div>
+        <div class="control-panel">
+            <div class="control-banner">
+                <div>
+                    <img src="resources/Emblem.png"/>
+                </div>
+            </div>
+            <div class="control-buttons">
+                <div class="control-button-set">
+                    <div class="button button-dpad">
+                        <img src="resources/DPad.png"/>
+                    </div>
+                </div>
+                <div class="control-button-set">
+                    <div id='button-b' class="button button-b">
+                        <img src="resources/ButtonB.png"/>
+                    </div>
+                    <div id='button-a' class="button button-a">
+                        <img src="resources/ButtonA.png"/>
+                    </div>
+                </div>
+            </div>
+            <div class="control-options">
+                <div class="control-button-set">
+                    <div class="button button-file">
+                        <input type='file'/>
+                        <img height="48" width="48" src="resources/ButtonC.png"/>
+                    </div>
+                </div>
+                <div class="control-button-set">
+                    <div id='button-ssim' class="button button-ssim">
+                        <img id='button-ssim-img' height="72" width="72" src="resources/SSIM_OFF.png"/>
+                    </div>
+                </div>
+                   <div class="control-button-set">
+                        <div id='button-hist' class="button button-hist">
+                            <img id='button-hist-img' height="72" width="72" src="resources/HIST_OFF.png"/>
+                        </div>
+                   </div>
+                </div> 
+            </div>
+        </div>
+    </div>
+
+    <div id="modal" class="md-modal">
+        <div class="md-content">
+            <h2 id='md-title'>Title</h2>
+            <div class="md-image-set">
+                <div class="md-image md-image-box">
+                    <img id="md-image-box"/>
+                </div>
+                <div class="md-image md-image-score">
+                    <img id="md-image-score"/>
+                </div>
+            </div>
+            <button id='md-close' class="md-close">
+                Close
+            </button>
+        </div>
+    </div>
+    
+    <script>
+            
+        const close = document.getElementById('md-close')
+        close.addEventListener('click', event => {
+            modal.classList.remove('md-show')
+        })
+
+        const file = document.querySelector('input[type=file]');
+        file.addEventListener('change', event => {
+            onChooseFile(event, event => {
+                onFileRead(event, content => {
+                    post('recommendations', content)
+                    .then(response => response.json())
+                    .then(data => {
+                        console.log(data)
+                        recommendations = data
+                    });
+                });
+            });
+        });
+
+        var use_ssim = false;
+        const ssim = document.getElementById('button-ssim');
+        ssim.addEventListener('click', event => {
+            use_ssim = !use_ssim
+            document.getElementById('button-ssim-img').setAttribute('src', `resources/SSIM_${use_ssim ? 'ON' : 'OFF' }.png`)
+        });
+
+        var use_hist = false;
+        const hist = document.getElementById('button-hist');
+        hist.addEventListener('click', event => {
+            use_hist = !use_hist
+            document.getElementById('button-hist-img').setAttribute('src', `resources/HIST_${use_hist ? 'ON' : 'OFF' }.png`)
+        });
+
+
+        const video = document.querySelector('video');
+        navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }}}).then(
+            stream => video.srcObject = stream,
+            error => console.log(error)
+        );
+
+        const m_title = document.getElementById('md-title');
+        const m_image_box = document.getElementById('md-image-box');
+        const m_image_score = document.getElementById('md-image-score')
+
+        const button = document.getElementById('button-a');        
+        button.addEventListener('click', event => {
+            onCaptureFrame(video, canvas => {
+                image = canvas.toDataURL('image/jpeg');
+                image = image.split(';base64')[1];
+                post(`scanner?use_ssim=${use_ssim}&use_hist=${use_hist}`, image)
+                    .then(response => response.json())
+                    .then(data => {
+                        
+                        if (data.count > 30) {
+                            m_title.innerText = data.title;
+                            m_image_box.parentElement.style.display = 'block';
+                            m_image_box.setAttribute('src', `data:image/jpeg;base64,${data.image}`);
+                            m_image_score.setAttribute('src', "resources/scores/not-rated.jpg");
+                            recommendation = find_recommendation(recommendations, data);
+                            if (recommendation) {
+                                m_image_score.setAttribute('src', `resources/scores/${Math.round(recommendation.recommendation_score)}.jpg`);
+                            }
+                        } else {
+                            m_title.innerText = 'Game Not Found';
+                            m_image_box.parentElement.style.display = 'none';
+
+                            m_image_box.setAttribute('src', '');
+                            m_image_score.setAttribute('src', 'resources/scores/not-found.jpg');
+                        }
+                        
+                        modal.classList.add('md-show')
+                    })
+            })
+        })
+
+    </script>
+</body>
+</html>
